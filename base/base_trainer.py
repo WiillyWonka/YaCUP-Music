@@ -1,14 +1,13 @@
 import torch
 from abc import abstractmethod
 from numpy import inf
-from logger import TensorboardWriter
 
 
 class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
+    def __init__(self, model, criterion, metric_ftns, optimizer, writer, config):
         self.config = config
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
 
@@ -38,9 +37,8 @@ class BaseTrainer:
         self.start_epoch = 1
 
         self.checkpoint_dir = config.save_dir
-
-        # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+      
+        self.writer = writer
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)

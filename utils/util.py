@@ -4,6 +4,11 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
+import numpy as np
+import random
+from sklearn.model_selection import train_test_split
+from typing import Union
+import logging
 
 
 def ensure_dir(dirname):
@@ -55,7 +60,7 @@ class MetricTracker:
 
     def update(self, key, value, n=1):
         if self.writer is not None:
-            self.writer.add_scalar(key, value)
+            self.writer.log_metric(key, value)
         self._data.total[key] += value * n
         self._data.counts[key] += n
         self._data.average[key] = self._data.total[key] / self._data.counts[key]
@@ -65,3 +70,45 @@ class MetricTracker:
 
     def result(self):
         return dict(self._data.average)
+
+def seed_worker(worker_id):
+    # Set dataloader worker seed https://pytorch.org/docs/stable/notes/randomness.html#dataloader
+    worker_seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+def load_labels(path):
+    return pd.read_csv(path)
+
+def autosplit(samples,
+              train_size: Union[int, float, None] = None, 
+              test_size: Union[int, float, None] = None, 
+              save_split: Union[str, Path, None] = None,
+              seed = 0):
+    
+    random.seed(seed)  # for reproducibility
+    train_samples, test_samples = train_test_split(samples, 
+                                                   train_size=train_size, 
+                                                   test_size=test_size,
+                                                   random_state = seed )
+
+    if isinstance(save_split, (str, Path)):
+        save_split = Path(save_split)
+
+        txt = ['autosplit_train.txt', 'autosplit_val.txt']  # 3 txt files
+        for x in txt:
+            file_path = save_split / x 
+            
+            if file_path.exists():
+                logging.warning(f"Older splitting file {str(file_path)} exists! It will be replaced by newer file.")
+                file_path.unlink()  # remove existing
+
+            for sample_path in train_samples:
+                with open(file_path, 'w') as f:
+                    f.write(str(sample_path) + '\n')  # add sample to txt file
+
+            for sample_path in test_samples:
+                with open(file_path, 'w') as f:
+                    f.write(str(sample_path) + '\n')  # add sample to txt file
+
+    return train_samples, test_samples

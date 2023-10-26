@@ -21,6 +21,10 @@ class WandbWriter:
         self.log_data = {}
         self.epoch = 0
 
+    def log(self, log_dict, epoch=None):
+        self.log_data.update(log_dict)
+        self.epoch = epoch
+
     def log_metric(self, key, value, epoch=None):
         self.log_data[key] = value
         self.epoch = epoch
