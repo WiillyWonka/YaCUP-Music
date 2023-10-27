@@ -10,12 +10,12 @@ def create_dataloader(df,
                       embed_path,
                       batch_size,
                       rt_load=True,
-                      testing=False,
+                      mode='train',
                       workers=8,
                       shuffle=False,
                       seed=0):
     
-    dataset = TaggingDataset(df, embed_path, rt_load, testing)
+    dataset = TaggingDataset(df, embed_path, rt_load, mode)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -27,7 +27,7 @@ def create_dataloader(df,
                   shuffle=shuffle,
                   num_workers=nw,
                   pin_memory=True,
-                  collate_fn=TaggingDataset.collate_fn,
+                  collate_fn=TaggingDataset.collate_fn_test if mode == 'test' else TaggingDataset.collate_fn,
                   worker_init_fn=seed_worker,
                   generator=generator), dataset
 
@@ -68,9 +68,12 @@ class _RepeatSampler:
 
 class TaggingDataset(Dataset):
     NUM_TAGS = 256
-    def __init__(self, df, embed_path, rt_load=True, testing=False):
+    def __init__(self, df, embed_path, rt_load=True, mode: str = 'train'):
         self.df = df
-        self.testing = testing
+
+        self.mode = mode
+        self.testing = True if mode == 'test' else False
+        self.valid = True if mode == 'val' else False
 
         self.rt_load = rt_load
         if rt_load:
@@ -93,6 +96,9 @@ class TaggingDataset(Dataset):
         else:
             embeds = self.embeddings[idx]
 
+        if self.testing:
+            return track_idx, embeds
+        
         tags = [int(x) for x in row.tags.split(',')]
         target = np.zeros(self.NUM_TAGS)
         target[tags] = 1
@@ -105,3 +111,9 @@ class TaggingDataset(Dataset):
         targets = np.vstack([x[2] for x in b])
         targets = torch.from_numpy(targets)
         return track_idxs, embeds, targets
+    
+    @staticmethod
+    def collate_fn_test(b):
+        track_idxs = torch.from_numpy(np.vstack([x[0] for x in b]))
+        embeds = [torch.from_numpy(x[1]) for x in b]
+        return track_idxs, embeds
