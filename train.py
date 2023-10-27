@@ -32,7 +32,7 @@ def main(config):
                                               batch_size=config['dataset']['batch_size'],
                                               rt_load=config['dataset']['rt_load'],
                                               workers=config['dataset']['workers'],
-                                              shuffle=True,
+                                              shuffle=True, mode='train',
                                               seed=config['dataset']['seed'])
 
     val_loader, val_dataset = create_dataloader(val_samples,
@@ -41,7 +41,7 @@ def main(config):
                                                 rt_load=config['dataset']['rt_load'],
                                                 testing=True,
                                                 workers=config['dataset']['workers'],
-                                                shuffle=False,
+                                                shuffle=False, mode='val',
                                                 seed=config['dataset']['seed'])
 
     # build model architecture, then print to console
