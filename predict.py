@@ -13,7 +13,7 @@ def predict(model, loader, device):
     track_idxs = []
     predictions = []
     with torch.no_grad():
-        for data in loader:
+        for data in tqdm(loader, total=len(loader)):
             track_idx, embeds = data
             embeds = [x.to(device) for x in embeds]
             pred_logits = model(embeds)
@@ -28,7 +28,7 @@ def predict(model, loader, device):
 def main(config):
     config = {
         'n_gpu': 1,
-        'checkpoint_path': 'saved/models/BaseLine/1027_160251/checkpoint-epoch25.pth',
+        'checkpoint_path': 'saved/models/BaseLine/1031_152037/best.pth',
         'dataset':
             {
             'embed_path': 'dataset/embeddings/',

@@ -95,20 +95,13 @@ def autosplit(samples,
     if isinstance(save_split, (str, Path)):
         save_split = Path(save_split)
 
-        txt = ['autosplit_train.txt', 'autosplit_val.txt']  # 3 txt files
-        for x in txt:
+        for x, save_samples in zip(['autosplit_train.csv', 'autosplit_val.csv'], [train_samples, test_samples]):
             file_path = save_split / x 
             
             if file_path.exists():
                 logging.warning(f"Older splitting file {str(file_path)} exists! It will be replaced by newer file.")
                 file_path.unlink()  # remove existing
 
-            for sample_path in train_samples:
-                with open(file_path, 'w') as f:
-                    f.write(str(sample_path) + '\n')  # add sample to txt file
-
-            for sample_path in test_samples:
-                with open(file_path, 'w') as f:
-                    f.write(str(sample_path) + '\n')  # add sample to txt file
+            save_samples.to_csv(file_path, index=False)
 
     return train_samples, test_samples

@@ -10,7 +10,10 @@ from parse_config import ConfigParser
 from trainer import Trainer
 from writer.wandb import WandbWriter
 from utils import prepare_device, load_labels, autosplit
+from pathlib import Path
 
+import pandas as pd
+import numpy as np
 
 # fix random seeds for reproducibility
 SEED = 123
@@ -24,7 +27,9 @@ def main(config):
 
     #Init dataloaders
     samples = load_labels(config['dataset']['labels_path'])
-    train_samples, val_samples = autosplit(samples, test_size=config['dataset']["test_size"])
+    save_split = Path(config['dataset']['labels_path']).parent
+    # save_split = None
+    train_samples, val_samples = autosplit(samples, test_size=config['dataset']["test_size"], save_split=save_split)
 
     # Trainloader
     train_loader, dataset = create_dataloader(train_samples,
@@ -39,7 +44,6 @@ def main(config):
                                                 config['dataset']['embed_path'],
                                                 batch_size=config['dataset']['batch_size'],
                                                 rt_load=config['dataset']['rt_load'],
-                                                testing=True,
                                                 workers=config['dataset']['workers'],
                                                 shuffle=False, mode='val',
                                                 seed=config['dataset']['seed'])
@@ -56,6 +60,7 @@ def main(config):
 
     # get function handles of loss and metrics
     criterion = config.init_obj('loss', module_loss)
+    criterion = criterion.to(device)
 
     writer = WandbWriter(config)
 

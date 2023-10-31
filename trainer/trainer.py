@@ -45,10 +45,11 @@ class Trainer(BaseTrainer):
         self.loss_metric.reset()
         self.running_loss_metric.reset()
 
-        pbar = tqdm(list(enumerate(self.data_loader)))
+        pbar = tqdm(enumerate(self.data_loader), total=self.len_epoch)
         for batch_idx, (data) in pbar:
             track_idxs, embeds, target = data
-            embeds = [x.to(self.device) for x in embeds]
+            # embeds = [x.to(self.device) for x in embeds]
+            embeds = embeds.to(self.device)
             target = target.to(self.device)
 
             self.optimizer.zero_grad()
@@ -65,7 +66,7 @@ class Trainer(BaseTrainer):
             if batch_idx == self.len_epoch:
                 break
 
-            pbar.set_description("loss: {loss:3f}".format(loss=self.running_loss_metric.compute()))
+            pbar.set_description("train/loss: {loss:3f}".format(loss=self.running_loss_metric.compute()))
             
         log_dict = {"train/loss": self.loss_metric.compute().item()}
 
@@ -94,10 +95,11 @@ class Trainer(BaseTrainer):
         self.running_loss_metric.reset()
 
         with torch.no_grad():
-            pbar = tqdm(list(enumerate(self.valid_data_loader)))
+            pbar = tqdm(enumerate(self.valid_data_loader), total=len(self.valid_data_loader))
             for batch_idx, (data) in pbar:
                 track_idxs, embeds, target = data
-                embeds = [x.to(self.device) for x in embeds]
+                # embeds = [x.to(self.device) for x in embeds]
+                embeds = embeds.to(self.device)
                 target = target.to(self.device)
 
                 self.optimizer.zero_grad()
@@ -110,7 +112,7 @@ class Trainer(BaseTrainer):
                 self.running_loss_metric.update(loss.item())
                 self.ap_metric.update(pred_probs, target.int())
 
-                pbar.set_description("loss: {loss:3f}".format(loss=self.running_loss_metric.compute()))
+                pbar.set_description("val/loss: {loss:3f}".format(loss=self.running_loss_metric.compute()))
 
         val_metrics = {
             "val/loss": self.loss_metric.compute().item(),

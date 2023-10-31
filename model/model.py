@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from base import BaseModel
+from transformers import BertForSequenceClassification
 
 class BaselineModel(nn.Module):
     def __init__(
@@ -30,3 +31,15 @@ class BaselineModel(nn.Module):
         x = self.lin(x)
         outs = self.fc(x)
         return outs
+
+class BERT(nn.Module):
+    def __init__(
+        self,
+        num_classes = 256
+    ):
+        super().__init__()
+        self.model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=num_classes, problem_type="multi_label_classification")
+
+    def forward(self, embeds):
+        out = self.model(inputs_embeds=embeds)
+        return out.logits

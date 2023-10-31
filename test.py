@@ -1,81 +1,97 @@
 import argparse
 import torch
 from tqdm import tqdm
-import data_loader.data_loaders as module_data
-import model.loss as module_loss
-import model.metric as module_metric
-import model.model as module_arch
-from parse_config import ConfigParser
+from model.model import BaselineModel
+import numpy as np
+import pandas as pd
+from data_loader.data_loaders import create_dataloader
+from utils import prepare_device, load_labels
+from torchmetrics.classification import MultilabelAveragePrecision
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def predict(model, loader, device):
+    model.eval()
+    track_idxs = []
+    predictions = []
+    with torch.no_grad():
+        for data in loader:
+            track_idx, embeds = data
+            embeds = [x.to(device) for x in embeds]
+            pred_logits = model(embeds)
+            pred_probs = torch.sigmoid(pred_logits)
+            predictions.append(pred_probs.cpu().numpy())
+            track_idxs.append(track_idx.numpy())
+    predictions = np.vstack(predictions)
+    track_idxs = np.vstack(track_idxs).ravel()
+    return track_idxs, predictions
 
 
 def main(config):
-    logger = config.get_logger('test')
+    config = {
+        'n_gpu': 1,
+        'checkpoint_path': 'saved/models/BaseLine/1030_175106/best.pth',
+        'dataset':
+            {
+            'embed_path': 'dataset/embeddings/',
+            'labels_path': 'dataset/autosplit_train.csv',
+            'rt_load': True,
+            'batch_size': 64,
+            'workers': 8,
+            'seed': 0
+            }
+    }
 
-    # setup data_loader instances
-    data_loader = getattr(module_data, config['data_loader']['type'])(
-        config['data_loader']['args']['data_dir'],
-        batch_size=512,
-        shuffle=False,
-        validation_split=0.0,
-        training=False,
-        num_workers=2
-    )
 
-    # build model architecture
-    model = config.init_obj('arch', module_arch)
-    logger.info(model)
 
-    # get function handles of loss and metrics
-    loss_fn = getattr(module_loss, config['loss'])
-    metric_fns = [getattr(module_metric, met) for met in config['metrics']]
+    samples = load_labels(config['dataset']['labels_path'])
+    # Trainloader
+    dataloader, dataset = create_dataloader(samples,
+                                              config['dataset']['embed_path'],
+                                              batch_size=config['dataset']['batch_size'],
+                                              rt_load=config['dataset']['rt_load'],
+                                              workers=config['dataset']['workers'],
+                                              shuffle=True, mode='val',
+                                              seed=config['dataset']['seed'])
+    
+    model = BaselineModel()
 
-    logger.info('Loading checkpoint: {} ...'.format(config.resume))
-    checkpoint = torch.load(config.resume)
-    state_dict = checkpoint['state_dict']
-    if config['n_gpu'] > 1:
-        model = torch.nn.DataParallel(model)
-    model.load_state_dict(state_dict)
+    checkpoint = torch.load(config['checkpoint_path'])
+    model.load_state_dict(checkpoint['state_dict'])
 
-    # prepare model for testing
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device, device_ids = prepare_device(config['n_gpu'])
     model = model.to(device)
+
+    ap_metric = MultilabelAveragePrecision(num_labels=256, average='none').to(device)
+
     model.eval()
-
-    total_loss = 0.0
-    total_metrics = torch.zeros(len(metric_fns))
-
+    track_idxs = []
+    predictions = []
     with torch.no_grad():
-        for i, (data, target) in enumerate(tqdm(data_loader)):
-            data, target = data.to(device), target.to(device)
-            output = model(data)
+        for data in tqdm(dataloader):
+            track_idxs, embeds, target = data
 
-            #
-            # save sample images, or do something with output here
-            #
+            target = target.to(device)
+            embeds = [x.to(device) for x in embeds]
+            pred_logits = model(embeds)
+            pred_probs = torch.sigmoid(pred_logits)
 
-            # computing loss, metrics on test set
-            loss = loss_fn(output, target)
-            batch_size = data.shape[0]
-            total_loss += loss.item() * batch_size
-            for i, metric in enumerate(metric_fns):
-                total_metrics[i] += metric(output, target) * batch_size
+            ap_metric.update(pred_probs, target.int())
+            
+    ap_values = ap_metric.compute()
 
-    n_samples = len(data_loader.sampler)
-    log = {'loss': total_loss / n_samples}
-    log.update({
-        met.__name__: total_metrics[i].item() / n_samples for i, met in enumerate(metric_fns)
-    })
-    logger.info(log)
+    df = pd.DataFrame.from_dict({i: ap_value.item() for i, ap_value in enumerate(ap_values)}, orient='index', columns=['value'])
+    print(df)
+    sns.barplot(x=df.index, y='value', data=df)
+    plt.show()
+
 
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='PyTorch Template')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path (default: None)')
-    args.add_argument('-r', '--resume', default=None, type=str,
-                      help='path to latest checkpoint (default: None)')
-    args.add_argument('-d', '--device', default=None, type=str,
-                      help='indices of GPUs to enable (default: all)')
 
-    config = ConfigParser.from_args(args)
+    # config = ConfigParser.from_args(args)
+    config=None
     main(config)

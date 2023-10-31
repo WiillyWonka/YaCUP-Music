@@ -4,14 +4,14 @@
     "n_gpu": 1,
 
     "arch": {
-        "type": "BaselineModel",
+        "type": "BERT",
         "args": {}
     },
     "dataset": {
         "embed_path": "dataset/embeddings/",
         "labels_path": "dataset/train.csv",
         "rt_load": true,
-        "batch_size": 64,
+        "batch_size": 1,
         "shuffle": true,
         "validation_split": 0.1,
         "workers": 8,
@@ -27,8 +27,8 @@
         }
     },
     "loss": {
-        "type": "BCEWithLogitsLoss",
-        "args": {}
+        "type": "WeightedBCE",
+        "args": {"class_count_path": "dataset/tags_count.csv"}
     },
     "metrics": [
         "accuracy", "top_k_acc"
@@ -47,7 +47,7 @@
         "save_period": 1,
         "verbosity": 2,
         
-        "monitor": "min val/loss",
+        "monitor": "max val/AP",
         "early_stop": 10,
 
         "tensorboard": true

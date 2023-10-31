@@ -96,6 +96,8 @@ class TaggingDataset(Dataset):
         else:
             embeds = self.embeddings[idx]
 
+        embeds /= 4
+
         if self.testing:
             return track_idx, embeds
         
@@ -107,7 +109,14 @@ class TaggingDataset(Dataset):
     @staticmethod
     def collate_fn(b):
         track_idxs = torch.from_numpy(np.vstack([x[0] for x in b]))
-        embeds = [torch.from_numpy(x[1]) for x in b]
+
+        max_seq = max([x[1].shape[0] for x in b])
+        padded_embeds = [np.pad(x[1], ((0, max_seq - x[1].shape[0]), (0, 0)), 'constant') for x in b]
+        embeds = np.stack(padded_embeds)
+        embeds = torch.from_numpy(embeds)
+
+        # embeds = [torch.from_numpy(x[1]) for x in b]
+        
         targets = np.vstack([x[2] for x in b])
         targets = torch.from_numpy(targets)
         return track_idxs, embeds, targets
