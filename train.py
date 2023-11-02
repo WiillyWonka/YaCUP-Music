@@ -12,6 +12,7 @@ from writer.wandb import WandbWriter
 from utils import prepare_device, load_labels, autosplit
 from pathlib import Path
 
+import wandb
 import pandas as pd
 import numpy as np
 
@@ -68,6 +69,8 @@ def main(config):
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+
+    wandb.watch(model)
 
     trainer = Trainer(model, criterion, None, optimizer, 
                       writer=writer,

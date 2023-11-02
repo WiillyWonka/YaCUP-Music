@@ -4,16 +4,15 @@
     "n_gpu": 1,
 
     "arch": {
-        "type": "BERT",
+        "type": "TransformerDecoder",
         "args": {}
     },
     "dataset": {
         "embed_path": "dataset/embeddings/",
         "labels_path": "dataset/train.csv",
         "rt_load": true,
-        "batch_size": 1,
+        "batch_size": 64,
         "shuffle": true,
-        "validation_split": 0.1,
         "workers": 8,
         "seed": 42,
         "test_size": 0.2
@@ -23,12 +22,15 @@
         "args":{
             "lr": 3e-4,
             "weight_decay": 0,
-            "amsgrad": true
+            "amsgrad": false
         }
     },
     "loss": {
-        "type": "WeightedBCE",
-        "args": {"class_count_path": "dataset/tags_count.csv"}
+        "type": "AsymmetricLoss",
+        "args": {
+            "gamma_neg": 1,
+            "gamma_pos": 1        
+        }
     },
     "metrics": [
         "accuracy", "top_k_acc"
@@ -41,14 +43,14 @@
         }
     },
     "trainer": {
-        "epochs": 100,
+        "epochs": 150,
 
         "save_dir": "saved/",
         "save_period": 1,
         "verbosity": 2,
         
         "monitor": "max val/AP",
-        "early_stop": 10,
+        "early_stop": 20,
 
         "tensorboard": true
     }

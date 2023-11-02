@@ -48,8 +48,8 @@ class Trainer(BaseTrainer):
         pbar = tqdm(enumerate(self.data_loader), total=self.len_epoch)
         for batch_idx, (data) in pbar:
             track_idxs, embeds, target = data
-            # embeds = [x.to(self.device) for x in embeds]
-            embeds = embeds.to(self.device)
+            embeds = [x.to(self.device) for x in embeds]
+            # embeds = embeds.to(self.device)
             target = target.to(self.device)
 
             self.optimizer.zero_grad()
@@ -98,8 +98,8 @@ class Trainer(BaseTrainer):
             pbar = tqdm(enumerate(self.valid_data_loader), total=len(self.valid_data_loader))
             for batch_idx, (data) in pbar:
                 track_idxs, embeds, target = data
-                # embeds = [x.to(self.device) for x in embeds]
-                embeds = embeds.to(self.device)
+                embeds = [x.to(self.device) for x in embeds]
+                # embeds = embeds.to(self.device)
                 target = target.to(self.device)
 
                 self.optimizer.zero_grad()

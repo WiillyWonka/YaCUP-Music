@@ -96,7 +96,7 @@ class TaggingDataset(Dataset):
         else:
             embeds = self.embeddings[idx]
 
-        embeds /= 4
+        # embeds /= 4
 
         if self.testing:
             return track_idx, embeds

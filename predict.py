@@ -49,7 +49,7 @@ def main(config):
                                               batch_size=config['dataset']['batch_size'],
                                               rt_load=config['dataset']['rt_load'],
                                               workers=config['dataset']['workers'],
-                                              shuffle=True, mode='test',
+                                              shuffle=False, mode='test',
                                               seed=config['dataset']['seed'])
     
     model = BaselineModel()
