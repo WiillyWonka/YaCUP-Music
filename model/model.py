@@ -2,7 +2,7 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 from base import BaseModel
-from transformers import BertForSequenceClassification
+from transformers import BertForSequenceClassification, WhisperModel
 from typing import List
 import math
 
@@ -68,15 +68,14 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class TransformerDecoder(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self,
+                 d_model,
+                 nhead,
+                 num_layers,
+                 dropout,
+                 n_classes,
+                 dim_feedforward) -> None:
         super().__init__()
-
-        d_model = 768
-        nhead = 2
-        num_layers = 1
-        dropout = 0.1
-        n_classes = 256
-        dim_feedforward = 2048
 
         self.pos_encoder = PositionalEncoding(d_model, dropout)
 
@@ -116,6 +115,46 @@ class TransformerDecoder(nn.Module):
             sample_emb = self.pos_encoder(sample_emb)
             output = self.transformer_decoder(self.query_embed.weight.unsqueeze(0), sample_emb)
             output = self.linear(output).view(1, -1)
+
+            out_batch.append( output )
+
+        out_batch = torch.cat(out_batch, dim=0)
+
+        return out_batch
+    
+class Whisper(nn.Module):
+    def __init__(self, freeze) -> None:
+        super().__init__()
+        self.model = WhisperModel.from_pretrained("openai/whisper-base")
+
+        if freeze:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.embed_proj = nn.Linear(768, 512)
+        self.pos_encoder = PositionalEncoding(512, 0.1)
+        self.decoder_inputs_embeds = nn.Embedding(256, 512)
+        self.output_proj = nn.Linear(512, 1)
+
+        self.init_weights()
+
+    def init_weights(self) -> None:
+        initrange = 0.1
+        self.embed_proj.bias.data.zero_()
+        self.embed_proj.weight.data.uniform_(-initrange, initrange)
+
+        self.output_proj.bias.data.zero_()
+        self.output_proj.weight.data.uniform_(-initrange, initrange)
+
+    def forward(self, embeddings):
+        out_batch = []
+
+        for sample_emb in embeddings:
+            sample_emb = sample_emb.unsqueeze(0)
+            sample_emb = self.embed_proj(sample_emb)
+            sample_emb = self.pos_encoder(sample_emb)
+            output = self.model(encoder_outputs=(sample_emb,), decoder_inputs_embeds=self.decoder_inputs_embeds.weight.unsqueeze(0)).last_hidden_state
+            output = self.output_proj(output).view(1, -1)
 
             out_batch.append( output )
 
