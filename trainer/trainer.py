@@ -68,7 +68,9 @@ class Trainer(BaseTrainer):
 
             pbar.set_description("train/loss: {loss:3f}".format(loss=self.running_loss_metric.compute()))
             
-        log_dict = {"train/loss": self.loss_metric.compute().item()}
+        log_dict = {
+            "train/loss": self.loss_metric.compute().item(),
+            "lr": self.optimizer.param_groups[0]['lr']}
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
