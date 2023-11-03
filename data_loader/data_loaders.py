@@ -5,6 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import os
 from utils.util import seed_worker
+import random
 
 def create_dataloader(df,
                       embed_path,
@@ -68,12 +69,22 @@ class _RepeatSampler:
 
 class TaggingDataset(Dataset):
     NUM_TAGS = 256
-    def __init__(self, df, embed_path, rt_load=True, mode: str = 'train'):
+    def __init__(self, df, embed_path, rt_load=True, augment_enable=False, mode: str = 'train'):
         self.df = df
 
         self.mode = mode
         self.testing = True if mode == 'test' else False
         self.valid = True if mode == 'val' else False
+
+        self.augment_enable = augment_enable and mode == 'train'
+
+        self.cat_p = 0
+        self.n_cat = 4 # must be >= 1
+        self.cat_enable = self.augment_enable and self.cat_p > 0
+
+        self.delete_p = 0
+        self.n_deletes = 4 # must be >= 1
+        self.delete_enable = self.augment_enable and self.delete_p > 0      
 
         self.rt_load = rt_load
         if rt_load:
@@ -85,18 +96,16 @@ class TaggingDataset(Dataset):
                 self.embeddings[embed_idx] = np.load(embed_file)
         
     def __len__(self):
-        return self.df.shape[0]
+        return self.df.shape[0]    
 
-    def __getitem__(self, idx):
+    def _get_sample(self, idx):
         row = self.df.iloc[idx]
         track_idx = row.track
 
         if self.rt_load:
             embeds = np.load(self.path_template.format(track_idx=track_idx))
         else:
-            embeds = self.embeddings[idx]
-
-        # embeds /= 4
+            embeds = self.embeddings[track_idx]
 
         if self.testing:
             return track_idx, embeds
@@ -104,18 +113,43 @@ class TaggingDataset(Dataset):
         tags = [int(x) for x in row.tags.split(',')]
         target = np.zeros(self.NUM_TAGS)
         target[tags] = 1
+
+        return track_idx, embeds, target
+
+
+    def __getitem__(self, idx):
+        if self.testing:
+            return self._get_sample(idx)
+        
+        track_idx, embeds, target = self._get_sample(idx)
+
+        if self.cat_enable and random.random() < self.cat_p:
+            track_idx, embeds, target = [track_idx], [embeds], [target]
+            for i in range(random.randint(1, self.n_cat)):
+                add_track_idx, add_embeds, add_target = self._get_sample(i)
+                track_idx.append(add_track_idx)
+                embeds.append(add_embeds)
+                target.append(add_target)
+            
+            embeds = np.concatenate(embeds, axis=0)
+
+            result_target = np.zeros_like(target[0])
+            for target_item in target:
+                result_target = np.logical_or(result_target, target_item)
+            target = result_target.astype(float)
+
+        if self.delete_enable and random.random() < self.delete_p:
+            random_indexes = np.random.choice(embeds.shape[0], size=random.randint(1, self.n_deletes), replace=False)
+            np.delete(embeds, random_indexes, axis=0).shape
+                
+
         return track_idx, embeds, target
     
     @staticmethod
     def collate_fn(b):
-        track_idxs = torch.from_numpy(np.vstack([x[0] for x in b]))
+        track_idxs = [x[0] for x in b]
 
-        max_seq = max([x[1].shape[0] for x in b])
-        padded_embeds = [np.pad(x[1], ((0, max_seq - x[1].shape[0]), (0, 0)), 'constant') for x in b]
-        embeds = np.stack(padded_embeds)
-        embeds = torch.from_numpy(embeds)
-
-        # embeds = [torch.from_numpy(x[1]) for x in b]
+        embeds = [torch.from_numpy(x[1]) for x in b]
         
         targets = np.vstack([x[2] for x in b])
         targets = torch.from_numpy(targets)
