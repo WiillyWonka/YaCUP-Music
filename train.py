@@ -70,8 +70,6 @@ def main(config):
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
-    wandb.watch(model)
-
     trainer = Trainer(model, criterion, None, optimizer, 
                       writer=writer,
                       config=config,
