@@ -74,7 +74,8 @@ class TransformerDecoder(nn.Module):
                  num_layers,
                  dropout,
                  n_classes,
-                 dim_feedforward) -> None:
+                 dim_feedforward,
+                 init_weights=False) -> None:
         super().__init__()
 
         self.pos_encoder = PositionalEncoding(d_model, dropout)
@@ -91,7 +92,8 @@ class TransformerDecoder(nn.Module):
 
         self.query_embed = nn.Embedding(n_classes, d_model)
 
-        self.init_weights()
+        if init_weights:
+            self.init_weights()
 
     def init_weights(self) -> None:
         initrange = 0.1
@@ -123,7 +125,9 @@ class TransformerDecoder(nn.Module):
         return out_batch
     
 class Whisper(nn.Module):
-    def __init__(self, freeze) -> None:
+    def __init__(self, 
+                 freeze,
+                 init_weights=False) -> None:
         super().__init__()
         self.model = WhisperModel.from_pretrained("openai/whisper-base")
 
@@ -136,7 +140,8 @@ class Whisper(nn.Module):
         self.decoder_inputs_embeds = nn.Embedding(256, 512)
         self.output_proj = nn.Linear(512, 1)
 
-        self.init_weights()
+        if init_weights:
+            self.init_weights()
 
     def init_weights(self) -> None:
         initrange = 0.1
