@@ -1,12 +1,17 @@
 {
     "project": "YaCUP-Music",
-    "name": "WhisperFreezed",
+    "name": "TransformerDecoder 2 layers",
     "n_gpu": 1,
 
     "arch": {
-        "type": "Whisper",
+        "type": "TransformerDecoder",
         "args": {
-            "freeze": true
+            "d_model": 768,
+            "nhead": 4,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "n_classes": 256,
+            "dim_feedforward": 2048 
         }
     },
     "dataset": {
@@ -23,7 +28,7 @@
         "type": "Adam",
         "args":{
             "lr": 3e-4,
-            "weight_decay": 0,
+            "weight_decay": 1e-4,
             "amsgrad": false
         }
     },
@@ -45,7 +50,7 @@
         }
     },
     "trainer": {
-        "epochs": 150,
+        "epochs": 200,
 
         "save_dir": "saved/",
         "save_period": 1,
