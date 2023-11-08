@@ -1,75 +1,89 @@
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import torch
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
-import os
-from utils.util import seed_worker
 import random
+import pandas as pd
+from typing import Optional
+import logging
+from sklearn.model_selection import train_test_split
+from base.base_data_module import BaseDataModule
 
-def create_dataloader(df,
-                      embed_path,
-                      batch_size,
-                      rt_load=True,
-                      mode='train',
-                      workers=8,
-                      shuffle=False,
-                      seed=0):
+
+class DataModule(BaseDataModule):
+    def __init__(self,
+                 batch_size,
+                 workers,
+                 labels_path,
+                 train_size=None,
+                 test_size=None,
+                 save_split=None,
+                 shuffle=False,
+                 seed=42,
+                 dataset_args = dict()) -> None:
+        
+        self.train_size = train_size
+        self.test_size = test_size
+        self.save_split = save_split
+        self.labels_path = labels_path
+
+        self.dataset_args = dataset_args
+
+        super().__init__(batch_size,
+                         workers,
+                         shuffle,
+                         seed)
+
+    def setup(self, stage: Optional[str] = None) -> None:
+
+        samples = self._load_labels()
+        # save_split = None
+        train_samples, val_samples = self._autosplit(samples)
+
+        self.data_train = TaggingDataset(train_samples, mode='train', **self.dataset_args)
+        self.data_val = TaggingDataset(val_samples, mode='val', **self.dataset_args)
+
+    def _load_labels(self):
+        return pd.read_csv(self.labels_path)
     
-    dataset = TaggingDataset(df, embed_path, rt_load, mode)
+    def _autosplit(self, samples):
+        random.seed(self.seed)  # for reproducibility
+        train_samples, test_samples = train_test_split(samples, 
+                                                       train_size=self.train_size, 
+                                                       test_size=self.test_size,
+                                                       random_state = self.seed )
 
-    batch_size = min(batch_size, len(dataset))
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
-    loader = InfiniteDataLoader
-    generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + seed)
-    return loader(dataset,
-                  batch_size=batch_size,
-                  shuffle=shuffle,
-                  num_workers=nw,
-                  pin_memory=True,
-                  collate_fn=TaggingDataset.collate_fn_test if mode == 'test' else TaggingDataset.collate_fn,
-                  worker_init_fn=seed_worker,
-                  generator=generator), dataset
+        if isinstance(self.save_split, (str, Path)):
+            save_split = Path(self.save_split)
 
+            for x, save_samples in zip(['autosplit_train.csv', 'autosplit_val.csv'], [train_samples, test_samples]):
+                file_path = save_split / x 
+                
+                if file_path.exists():
+                    logging.warning(f"Older splitting file {str(file_path)} exists! It will be replaced by newer file.")
+                    file_path.unlink()  # remove existing
 
-class InfiniteDataLoader(DataLoader):
-    """ Dataloader that reuses workers
+                save_samples.to_csv(file_path, index=False)
 
-    Uses same syntax as vanilla DataLoader
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        object.__setattr__(self, 'batch_sampler', _RepeatSampler(self.batch_sampler))
-        self.iterator = super().__iter__()
-
-    def __len__(self):
-        return len(self.batch_sampler.sampler)
-
-    def __iter__(self):
-        for _ in range(len(self)):
-            yield next(self.iterator)
-
-
-class _RepeatSampler:
-    """ Sampler that repeats forever
-
-    Args:
-        sampler (Sampler)
-    """
-
-    def __init__(self, sampler):
-        self.sampler = sampler
-
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)
+        return train_samples, test_samples
 
 
 class TaggingDataset(Dataset):
     NUM_TAGS = 256
-    def __init__(self, df, embed_path, rt_load=True, augment_enable=False, mode: str = 'train'):
+    def __init__(self, 
+                 df, 
+                 embed_path, 
+                 rt_load=True, 
+                 augment_enable=False, 
+                 mode: str = 'train',
+                 cat_p=0,
+                 n_cat=0,
+                 delete_p=0,
+                 f_deletes=0,
+                 dropout_p=0,
+                 f_dropout=0):
+        
         self.df = df
 
         self.mode = mode
@@ -78,13 +92,17 @@ class TaggingDataset(Dataset):
 
         self.augment_enable = augment_enable and mode == 'train'
 
-        self.cat_p = 0
-        self.n_cat = 4 # must be >= 1
+        self.cat_p = cat_p
+        self.n_cat = n_cat # must be >= 1
         self.cat_enable = self.augment_enable and self.cat_p > 0
 
-        self.delete_p = 0
-        self.n_deletes = 4 # must be >= 1
-        self.delete_enable = self.augment_enable and self.delete_p > 0      
+        self.delete_p = delete_p # probability [0, 1]
+        self.f_deletes = f_deletes # fraction [0, 1]
+        self.delete_enable = self.augment_enable and self.delete_p > 0 and self.f_deletes > 0
+
+        self.dropout_p = dropout_p # probability [0, 1]
+        self.f_dropout = f_dropout # fraction [0, 1]
+        self.dropout_enable = self.augment_enable and self.dropout_p > 0 and self.f_dropout > 0
 
         self.rt_load = rt_load
         if rt_load:
@@ -139,9 +157,18 @@ class TaggingDataset(Dataset):
             target = result_target.astype(float)
 
         if self.delete_enable and random.random() < self.delete_p:
-            random_indexes = np.random.choice(embeds.shape[0], size=random.randint(1, self.n_deletes), replace=False)
-            np.delete(embeds, random_indexes, axis=0).shape
+            size = int(embeds.shape[0] * random.random() * self.f_deletes)
+            random_indexes = np.random.choice(embeds.shape[0], size=size, replace=False)
+            embeds = np.delete(embeds, random_indexes, axis=0)
                 
+        if self.dropout_enable and random.random() < self.dropout_p:
+            size = int(embeds.size * random.random() * self.f_dropout)
+
+            idxs = np.random.choice(range(embeds.size), size=size, replace=False)
+            for idx in idxs:
+                i, j = idx // embeds.shape[1], idx % embeds.shape[1]
+                embeds[i, j] = 0
+
 
         return track_idx, embeds, target
     
@@ -151,12 +178,10 @@ class TaggingDataset(Dataset):
 
         embeds = [torch.from_numpy(x[1]) for x in b]
         
-        targets = np.vstack([x[2] for x in b])
-        targets = torch.from_numpy(targets)
-        return track_idxs, embeds, targets
-    
-    @staticmethod
-    def collate_fn_test(b):
-        track_idxs = torch.from_numpy(np.vstack([x[0] for x in b]))
-        embeds = [torch.from_numpy(x[1]) for x in b]
+        if len(b[0]) > 2:
+            targets = np.vstack([x[2] for x in b])
+            targets = torch.from_numpy(targets)
+
+            return track_idxs, embeds, targets
+        
         return track_idxs, embeds

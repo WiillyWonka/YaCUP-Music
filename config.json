@@ -1,6 +1,6 @@
 {
     "project": "YaCUP-Music",
-    "name": "TransformerDecoder 2 layers",
+    "name": "embeddings dropout",
     "n_gpu": 1,
 
     "arch": {
@@ -15,14 +15,26 @@
         }
     },
     "dataset": {
-        "embed_path": "dataset/embeddings/",
-        "labels_path": "dataset/train.csv",
-        "rt_load": true,
-        "batch_size": 64,
-        "shuffle": true,
-        "workers": 8,
-        "seed": 42,
-        "test_size": 0.2
+        "type": "DataModule",
+        "args": {
+            "shuffle": true,
+            "workers": 8,
+            "seed": 42,
+            "test_size": 0.2,
+            "batch_size": 64,
+            "labels_path": "dataset/train.csv",
+            "dataset_args": {
+                "embed_path": "dataset/embeddings/",
+                "rt_load": true,
+                "augment_enable": true,
+                "cat_p": 0,
+                "n_cat": 0,
+                "delete_p": 0.8,
+                "f_deletes": 0.2,
+                "dropout_p": 0.8,
+                "f_dropout": 0.2
+            }
+        }        
     },
     "optimizer": {
         "type": "Adam",

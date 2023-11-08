@@ -2,18 +2,17 @@ import argparse
 import collections
 import torch
 import numpy as np
+
 import model.loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
-from data_loader.data_loaders import create_dataloader
+import model.model as module_arch
+import data_loader.data_loaders as module_data
+
 from parse_config import ConfigParser
 from trainer import Trainer
 from writer.wandb import WandbWriter
-from utils import prepare_device, load_labels, autosplit
-from pathlib import Path
-
-import wandb
-import pandas as pd
+from utils import prepare_device
 import numpy as np
 
 # fix random seeds for reproducibility
@@ -27,27 +26,9 @@ def main(config):
     logger = config.get_logger('train')
 
     #Init dataloaders
-    samples = load_labels(config['dataset']['labels_path'])
-    save_split = Path(config['dataset']['labels_path']).parent
-    # save_split = None
-    train_samples, val_samples = autosplit(samples, test_size=config['dataset']["test_size"], save_split=save_split)
-
-    # Trainloader
-    train_loader, dataset = create_dataloader(train_samples,
-                                              config['dataset']['embed_path'],
-                                              batch_size=config['dataset']['batch_size'],
-                                              rt_load=config['dataset']['rt_load'],
-                                              workers=config['dataset']['workers'],
-                                              shuffle=True, mode='train',
-                                              seed=config['dataset']['seed'])
-
-    val_loader, val_dataset = create_dataloader(val_samples,
-                                                config['dataset']['embed_path'],
-                                                batch_size=config['dataset']['batch_size'],
-                                                rt_load=config['dataset']['rt_load'],
-                                                workers=config['dataset']['workers'],
-                                                shuffle=False, mode='val',
-                                                seed=config['dataset']['seed'])
+    datamodule = config.init_obj('dataset', module_data)
+    train_loader = datamodule.train_dataloader()
+    val_loader = datamodule.val_dataloader()
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
