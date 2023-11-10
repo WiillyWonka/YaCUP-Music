@@ -82,7 +82,15 @@ class TaggingDataset(Dataset):
                  delete_p=0,
                  f_deletes=0,
                  dropout_p=0,
-                 f_dropout=0):
+                 f_dropout=0,
+                 jitter_p=0,
+                 f_jitter=0,
+                 std_embeddings: str = "embeddings_std.npy",
+                 mean_embeddings: str = "embeddings_mean.npy",
+                 permutation_p=0,
+                 n_permutation=0,
+                 normalize=True
+                 ):
         
         self.df = df
 
@@ -103,6 +111,19 @@ class TaggingDataset(Dataset):
         self.dropout_p = dropout_p # probability [0, 1]
         self.f_dropout = f_dropout # fraction [0, 1]
         self.dropout_enable = self.augment_enable and self.dropout_p > 0 and self.f_dropout > 0
+
+        self.jitter_p = jitter_p # probability [0, 1]
+        self.f_jitter = f_jitter # fraction [0, 1]
+        self.jitter_enable = self.augment_enable and self.jitter_p > 0 and self.f_jitter > 0
+
+        self.permutation_p = permutation_p # probability [0, 1]
+        self.n_permutation = n_permutation # pair numbers
+        self.permutation_enable = self.augment_enable and self.permutation_p > 0 and self.n_permutation > 0
+
+        self.std_embeddings = np.load(std_embeddings)
+        self.mean_embeddings = np.load(mean_embeddings)
+
+        self.normalize = normalize
 
         self.rt_load = rt_load
         if rt_load:
@@ -125,6 +146,9 @@ class TaggingDataset(Dataset):
         else:
             embeds = self.embeddings[track_idx]
 
+        if self.normalize:
+            embeds = (embeds - self.mean_embeddings) / self.std_embeddings
+
         if self.testing:
             return track_idx, embeds
         
@@ -143,7 +167,8 @@ class TaggingDataset(Dataset):
 
         if self.cat_enable and random.random() < self.cat_p:
             track_idx, embeds, target = [track_idx], [embeds], [target]
-            for i in range(random.randint(1, self.n_cat)):
+            for _ in range(random.randint(1, self.n_cat)):
+                i = random.randint(1, len(self)-1)
                 add_track_idx, add_embeds, add_target = self._get_sample(i)
                 track_idx.append(add_track_idx)
                 embeds.append(add_embeds)
@@ -160,7 +185,15 @@ class TaggingDataset(Dataset):
             size = int(embeds.shape[0] * random.random() * self.f_deletes)
             random_indexes = np.random.choice(embeds.shape[0], size=size, replace=False)
             embeds = np.delete(embeds, random_indexes, axis=0)
-                
+
+        if self.permutation_enable and random.random() < self.permutation_p:
+            size = int(random.random() * self.n_permutation)
+            for _ in range(size):
+                i = np.random.choice(range(embeds.shape[0]))
+                j = np.random.choice(range(embeds.shape[0]))
+
+                embeds[i], embeds[j] = embeds[j], embeds[i]
+
         if self.dropout_enable and random.random() < self.dropout_p:
             size = int(embeds.size * random.random() * self.f_dropout)
 
@@ -168,7 +201,14 @@ class TaggingDataset(Dataset):
             for idx in idxs:
                 i, j = idx // embeds.shape[1], idx % embeds.shape[1]
                 embeds[i, j] = 0
-
+                
+        if self.jitter_enable and random.random() < self.jitter_p:
+            for i in range(embeds.shape[0]):
+                fraction_sign = np.sign(random.random() - 0.5)
+                fraction_magnitude = random.random() * self.f_jitter
+                if not self.normalize:
+                    fraction_magnitude *= self.std_embeddings
+                embeds[i] += fraction_sign * fraction_magnitude
 
         return track_idx, embeds, target
     
