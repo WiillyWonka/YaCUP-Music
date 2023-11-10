@@ -35,7 +35,7 @@ class WeightedBCE(torch.nn.Module):
         return loss
     
 class AsymmetricLoss(nn.Module):
-    def __init__(self, gamma_neg=4, gamma_pos=1, clip=0.05, eps=1e-8, disable_torch_grad_focal_loss=False):
+    def __init__(self, gamma_neg=4, gamma_pos=1, clip=0.1, eps=1e-8, disable_torch_grad_focal_loss=False):
         super(AsymmetricLoss, self).__init__()
 
         self.gamma_neg = gamma_neg
@@ -59,7 +59,9 @@ class AsymmetricLoss(nn.Module):
 
         # Asymmetric Clipping
         if self.clip is not None and self.clip > 0:
-            xs_neg = (xs_neg + self.clip).clamp(max=1)
+            xs_neg = 1 - (xs_pos - self.clip).clamp(min=0)
+        else:
+            xs_neg = 1 - x_sigmoid
 
         # Basic CE calculation
         los_pos = y * torch.log(xs_pos.clamp(min=self.eps, max=1-self.eps))
