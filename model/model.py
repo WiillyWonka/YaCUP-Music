@@ -88,6 +88,15 @@ class TransformerDecoder(nn.Module):
         
         self.transformer_decoder = torch.nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
+        # hidden_dim = 512
+
+        # self.lin = nn.Sequential(
+        #     nn.Linear(d_model, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.LayerNorm(hidden_dim)
+        # )
+
         self.linear = nn.Linear(d_model, 1)
 
         self.query_embed = nn.Embedding(n_classes, d_model)
@@ -116,6 +125,7 @@ class TransformerDecoder(nn.Module):
             sample_emb = sample_emb.unsqueeze(0)
             sample_emb = self.pos_encoder(sample_emb)
             output = self.transformer_decoder(self.query_embed.weight.unsqueeze(0), sample_emb)
+            # output = self.lin(output)
             output = self.linear(output).view(1, -1)
 
             out_batch.append( output )
