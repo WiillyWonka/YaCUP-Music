@@ -203,12 +203,10 @@ class TaggingDataset(Dataset):
                 embeds[i, j] = 0
                 
         if self.jitter_enable and random.random() < self.jitter_p:
-            for i in range(embeds.shape[0]):
-                fraction_sign = np.sign(random.random() - 0.5)
-                fraction_magnitude = random.random() * self.f_jitter
-                if not self.normalize:
-                    fraction_magnitude *= self.std_embeddings
-                embeds[i] += fraction_sign * fraction_magnitude
+            fraction_magnitude = random.random() * self.f_jitter
+            jitter_embeds = np.random.rand(*embeds.shape) * 2 - 1
+            jitter_embeds = jitter_embeds * fraction_magnitude
+            embeds += jitter_embeds
 
         return track_idx, embeds, target
     
