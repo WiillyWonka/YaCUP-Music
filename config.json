@@ -1,13 +1,13 @@
 {
     "project": "YaCUP-Music",
-    "name": "embeddings dropout",
+    "name": "augmentation",
     "n_gpu": 1,
 
     "arch": {
         "type": "TransformerDecoder",
         "args": {
             "d_model": 768,
-            "nhead": 4,
+            "nhead": 8,
             "num_layers": 2,
             "dropout": 0.1,
             "n_classes": 256,
@@ -27,12 +27,19 @@
                 "embed_path": "dataset/embeddings/",
                 "rt_load": true,
                 "augment_enable": true,
-                "cat_p": 0,
-                "n_cat": 0,
+                "cat_p": 0.5,
+                "n_cat": 3,
                 "delete_p": 0.8,
                 "f_deletes": 0.2,
-                "dropout_p": 0.8,
-                "f_dropout": 0.2
+                "dropout_p": 0,
+                "f_dropout": 0.2,
+                "jitter_p": 0.3,
+                "f_jitter": 0.2,
+                "std_embeddings": "dataset/embeddings_std.npy",
+                "mean_embeddings": "dataset/embeddings_mean.npy",
+                "permutation_p": 0.2,
+                "n_permutation": 3,
+                "normalize": true
             }
         }        
     },
@@ -40,14 +47,14 @@
         "type": "Adam",
         "args":{
             "lr": 3e-4,
-            "weight_decay": 1e-4,
+            "weight_decay": 0,
             "amsgrad": false
         }
     },
     "loss": {
         "type": "AsymmetricLoss",
         "args": {
-            "gamma_neg": 1,
+            "gamma_neg": 2,
             "gamma_pos": 1        
         }
     },
@@ -55,14 +62,13 @@
         "accuracy", "top_k_acc"
     ],
     "lr_scheduler": {
-        "type": "StepLR",
+        "type": "ExponentialLR",
         "args": {
-            "step_size": 40,
-            "gamma": 0.1
+            "gamma": 0.93
         }
     },
     "trainer": {
-        "epochs": 200,
+        "epochs": 150,
 
         "save_dir": "saved/",
         "save_period": 1,
